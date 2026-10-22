@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BrandX</string>
+    <string name="welcome_title">Welcome to BrandX</string>
+    <string name="welcome_subtitle">A thoughtful digital experience built around your vision.</string>
+    <string name="primary_action">Launch</string>
+    <string name="secondary_action">Preview</string>
+    <string name="status_active">Live</string>
+    <string name="status_idle">Ready</string>
+    <string name="dashboard_title">Overview</string>
+    <string name="feature_one">Smart tools</string>
+    <string name="feature_two">Fast access</string>
+    <string name="feature_three">Tailored brand</string>
+</resources>
