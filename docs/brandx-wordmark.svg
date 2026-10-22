@@ -1,0 +1,15 @@
+<svg width="1800" height="600" viewBox="0 0 1800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="80" x2="520" y2="520" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C3AED"/>
+      <stop offset="0.52" stop-color="#A855F7"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="50" y="50" width="500" height="500" rx="130" fill="url(#bg)"/>
+  <path d="M190 190H285L385 335L485 190H580L442 400L580 610H485L385 465L285 610H190L328 400L190 190Z" fill="white"/>
+  <path d="M328 280H392L448 354L503 280H568L475 404L568 528H503L448 454L392 528H328L421 404L328 280Z" fill="#22C55E"/>
+
+  <text x="700" y="360" fill="#111827" font-size="200" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="-8">BrandX</text>
+</svg>
