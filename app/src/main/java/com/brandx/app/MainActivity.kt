@@ -4,6 +4,9 @@ import android.os.Bundle
 import android.net.Uri
 import android.view.View
 import android.widget.*
+import android.content.Context
+import android.content.res.Configuration
+import java.util.Locale
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -31,6 +34,13 @@ class MainActivity : AppCompatActivity() {
     private var channels: List<Channel> = emptyList()
     private var selected: Channel? = null
     private var position = 0L
+
+    override fun attachBaseContext(base: Context) {
+        val config = Configuration(base.resources.configuration)
+        config.setLocale(Locale("ru"))
+        super.attachBaseContext(base.createConfigurationContext(config))
+    }
+
     private fun valid(url: String): Boolean = try {
         val u = URI(url)
         (u.scheme.equals("https", true) || u.scheme.equals("http", true)) && !u.host.isNullOrBlank() && u.userInfo == null
@@ -44,19 +54,19 @@ class MainActivity : AppCompatActivity() {
         }
         root.addView(TextView(this).apply { text = "VEDA IPTV"; textSize = 24f })
         address = EditText(this).apply {
-            hint = "M3U / M3U8 URL (https://...)"
+            hint = "Ссылка на плейлист M3U / M3U8"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
             setSingleLine(true)
             setText(state?.getString("address") ?: "")
         }
         root.addView(address)
         root.addView(Button(this).apply {
-            text = "Load playlist"
+            text = "Загрузить плейлист"
             setOnClickListener { load(address.text.toString().trim()) }
         })
         busy = ProgressBar(this).apply { visibility = View.GONE }
         root.addView(busy)
-        status = TextView(this).apply { text = "Enter your playlist URL. HTTP is not encrypted." }
+        status = TextView(this).apply { text = "Вставьте ссылку на свой плейлист. Соединения HTTP не зашифрованы." }
         root.addView(status)
         video = PlayerView(this)
         root.addView(video, LinearLayout.LayoutParams(-1, (220 * resources.displayMetrics.density).toInt()))
@@ -69,18 +79,18 @@ class MainActivity : AppCompatActivity() {
         }
         setContentView(root)
         state?.getString("stream")?.let {
-            selected = Channel(state.getString("title") ?: "Stream", it, state.getBoolean("hls"))
+            selected = Channel(state.getString("title") ?: "Трансляция", it, state.getBoolean("hls"))
             position = state.getLong("position")
         }
     }
 
     private fun load(url: String) {
-        if (!valid(url)) { status.text = "Enter a valid HTTP/HTTPS URL without embedded credentials"; return }
+        if (!valid(url)) { status.text = "Введите корректную ссылку HTTP/HTTPS без логина и пароля в адресе"; return }
         generation++
         val current = generation
         task?.cancel(true)
         busy.visibility = View.VISIBLE
-        status.text = "Loading..."
+        status.text = "Загрузка плейлиста…"
         task = executor.submit {
             try {
                 var next = url
@@ -90,7 +100,7 @@ class MainActivity : AppCompatActivity() {
                 val deadline = System.nanoTime() + 45_000_000_000L
                 for (hop in 0..5) {
                     if (Thread.currentThread().isInterrupted) throw InterruptedException()
-                    if (!valid(next)) error("Unsupported redirect")
+                    if (!valid(next)) error("Неподдерживаемое перенаправление")
                     val connection = URL(next).openConnection() as HttpURLConnection
                     connection.connectTimeout = 8000
                     connection.readTimeout = 8000
@@ -99,7 +109,7 @@ class MainActivity : AppCompatActivity() {
                     try {
                         val code = connection.responseCode
                         if (code in listOf(301, 302, 303, 307, 308)) {
-                            val location = connection.getHeaderField("Location") ?: error("Missing redirect")
+                            val location = connection.getHeaderField("Location") ?: error("Нет адреса перенаправления")
                             next = URI(next).resolve(location).toString()
                             continue
                         }
@@ -110,10 +120,10 @@ class MainActivity : AppCompatActivity() {
                             val buffer = ByteArray(8192)
                             while (true) {
                                 if (Thread.currentThread().isInterrupted) throw InterruptedException()
-                                if (System.nanoTime() > deadline) error("Playlist timeout")
+                                if (System.nanoTime() > deadline) error("Превышено время загрузки")
                                 val count = input.read(buffer)
                                 if (count < 0) break
-                                if (output.size() + count > 5 * 1024 * 1024) error("Playlist exceeds 5 MB")
+                                if (output.size() + count > 5 * 1024 * 1024) error("Размер плейлиста превышает 5 МБ")
                                 output.write(buffer, 0, count)
                             }
                             content = output.toString("UTF-8").removePrefix("\uFEFF")
@@ -122,11 +132,11 @@ class MainActivity : AppCompatActivity() {
                         break
                     } finally { connection.disconnect() }
                 }
-                if (!fetched) error("Too many redirects")
-                if (!content.trimStart().startsWith("#EXTM3U")) error("Not an M3U playlist")
+                if (!fetched) error("Слишком много перенаправлений")
+                if (!content.trimStart().startsWith("#EXTM3U")) error("Это не плейлист M3U")
                 val parsed = mutableListOf<Channel>()
                 if (content.lineSequence().any { it.trim().startsWith("#EXT-X-") }) {
-                    parsed.add(Channel("HLS stream", base, true))
+                    parsed.add(Channel("Трансляция HLS", base, true))
                 } else {
                     var title = ""
                     for (raw in content.lineSequence()) {
@@ -134,18 +144,18 @@ class MainActivity : AppCompatActivity() {
                         if (line.startsWith("#EXTINF:")) title = line.substringAfter(',', "").trim()
                         else if (line.isNotBlank() && !line.startsWith("#")) {
                             val link = try { URI(base).resolve(line).toString() } catch (_: Exception) { "" }
-                            if (valid(link)) parsed.add(Channel(title.ifBlank { "Channel ${parsed.size + 1}" }, link))
+                            if (valid(link)) parsed.add(Channel(title.ifBlank { "Канал ${parsed.size + 1}" }, link))
                             title = ""
                             if (parsed.size >= 20000) break
                         }
                     }
                 }
-                if (parsed.isEmpty()) error("No supported HTTP/HTTPS channels found")
+                if (parsed.isEmpty()) error("Поддерживаемые каналы HTTP/HTTPS не найдены")
                 runOnUiThread {
                     if (!isDestroyed && current == generation) {
                         channels = parsed
                         list.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, parsed.map { it.name })
-                        status.text = "Channels: ${parsed.size}. Select one to play."
+                        status.text = "Каналов: ${parsed.size}. Выберите канал для просмотра."
                         busy.visibility = View.GONE
                     }
                 }
@@ -155,7 +165,7 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (!isDestroyed && current == generation) {
                         busy.visibility = View.GONE
-                        status.text = "Playlist failed. Check URL, network and provider access."
+                        status.text = "Не удалось загрузить плейлист. Проверьте ссылку, интернет и доступ у провайдера."
                     }
                 }
             }
@@ -170,7 +180,7 @@ class MainActivity : AppCompatActivity() {
         video.player = engine
         engine.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                status.text = "Cannot play this channel. Check the provider, format or network."
+                status.text = "Не удалось воспроизвести канал. Проверьте провайдера, формат трансляции и интернет."
             }
         })
         val item = MediaItem.Builder().setUri(Uri.parse(channel.url))
