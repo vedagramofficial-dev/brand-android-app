@@ -7,26 +7,30 @@ import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.brandx.app.data.Channel
+import com.brandx.app.data.Favorite
 import com.brandx.app.data.RecentChannel
 import com.brandx.app.data.VedaDatabase
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class ChannelActivity : AppCompatActivity() {
     private val db by lazy { VedaDatabase.get(this) }
     private var playlistId = 0L
     private var channels = emptyList<Channel>()
+    private var favorites = emptySet<String>()
+    private var recent = emptySet<String>()
     private var visible = emptyList<Channel>()
+    private var groups = listOf("Все каналы", "Избранное", "Недавние")
     private lateinit var categories: Spinner
     private lateinit var search: EditText
     private lateinit var list: ListView
-    private var groups = listOf("Все каналы", "Избранное", "Недавние")
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         playlistId = intent.getLongExtra("playlistId", 0L)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 8) }
-        root.addView(TextView(this).apply { text = "Каналы"; textSize = 22f })
+        root.addView(TextView(this).apply { text = intent.getStringExtra("name") ?: "Каналы"; textSize = 22f })
         categories = Spinner(this)
         root.addView(categories)
         search = EditText(this).apply { hint = "Поиск канала"; setSingleLine(true) }
@@ -44,11 +48,16 @@ class ChannelActivity : AppCompatActivity() {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { filter() }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
-        list.setOnItemClickListener { _, _, index, _ -> open(visible[index]) }
+        list.setOnItemClickListener { _, _, index, _ -> visible.getOrNull(index)?.let(::open) }
         list.setOnItemLongClickListener { _, _, index, _ ->
-            lifecycleScope.launch {
-                val channel = visible[index]
-                val favorite = db.channelDao().observeFavorites(playlistId).let { emptyList<com.brandx.app.data.Favorite>() }
+            visible.getOrNull(index)?.let { channel ->
+                lifecycleScope.launch {
+                    if (channel.url in favorites) db.channelDao().removeFavorite(playlistId, channel.url)
+                    else db.channelDao().addFavorite(Favorite(playlistId, channel.url, System.currentTimeMillis()))
+                    favorites = db.channelDao().observeFavorites(playlistId).first().map { it.url }.toSet()
+                    filter()
+                    Toast.makeText(this@ChannelActivity, if (channel.url in favorites) "Добавлено в избранное" else "Удалено из избранного", Toast.LENGTH_SHORT).show()
+                }
             }
             true
         }
@@ -61,6 +70,16 @@ class ChannelActivity : AppCompatActivity() {
                 filter()
             }
         }
+        lifecycleScope.launch {
+            db.channelDao().observeFavorites(playlistId).collectLatest { items ->
+                favorites = items.map { it.url }.toSet(); filter()
+            }
+        }
+        lifecycleScope.launch {
+            db.channelDao().observeRecent(playlistId).collectLatest { items ->
+                recent = items.map { it.url }.toSet(); filter()
+            }
+        }
     }
 
     private fun filter() {
@@ -69,13 +88,15 @@ class ChannelActivity : AppCompatActivity() {
         visible = channels.filter {
             val inGroup = when (group) {
                 "Все каналы" -> true
-                "Избранное" -> false
-                "Недавние" -> false
+                "Избранное" -> it.url in favorites
+                "Недавние" -> it.url in recent
                 else -> it.category == group
             }
             inGroup && it.name.contains(query, true)
         }
-        list.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, visible.map { it.name })
+        list.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, visible.map {
+            (if (it.url in favorites) "★ " else "") + it.name
+        })
     }
 
     private fun open(channel: Channel) {
