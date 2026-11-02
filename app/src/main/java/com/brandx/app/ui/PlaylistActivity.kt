@@ -12,15 +12,12 @@ import com.brandx.app.data.Playlist
 import com.brandx.app.data.PlaylistParser
 import com.brandx.app.data.VedaDatabase
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.concurrent.Executors
 
 class PlaylistActivity : AppCompatActivity() {
     private val db by lazy { VedaDatabase.get(this) }
-    private val worker = Executors.newSingleThreadExecutor()
     private var playlists = emptyList<Playlist>()
     private lateinit var list: ListView
     private lateinit var status: TextView
@@ -79,18 +76,21 @@ class PlaylistActivity : AppCompatActivity() {
         }
         progress.visibility = View.VISIBLE
         status.text = "Загрузка плейлиста…"
-        worker.submit {
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val text = PlaylistParser.download(url)
-                val id = existing?.id ?: 0L
-                val playlist = Playlist(id = id, name = name, url = url, updatedAt = System.currentTimeMillis())
+                val playlist = Playlist(id = existing?.id ?: 0L, name = name, url = url, updatedAt = System.currentTimeMillis())
                 val savedId = db.playlistDao().save(playlist)
                 val channels = PlaylistParser.parse(text, savedId)
                 db.playlistDao().replace(savedId, playlist.copy(id = savedId, channelCount = channels.size), channels)
-                runOnUiThread { progress.visibility = View.GONE; status.text = "Готово: ${channels.size} каналов" }
+                withContext(Dispatchers.Main) {
+                    if (!isDestroyed) { progress.visibility = View.GONE; status.text = "Готово: ${channels.size} каналов" }
+                }
             } catch (_: InterruptedException) {
             } catch (e: Exception) {
-                runOnUiThread { progress.visibility = View.GONE; status.text = "Ошибка: ${e.message ?: "проверьте ссылку и интернет"}" }
+                withContext(Dispatchers.Main) {
+                    if (!isDestroyed) { progress.visibility = View.GONE; status.text = "Ошибка: ${e.message ?: "проверьте ссылку и интернет"}" }
+                }
             }
         }
     }
@@ -102,15 +102,15 @@ class PlaylistActivity : AppCompatActivity() {
                     0 -> save(playlist, playlist.name, playlist.url)
                     1 -> showAddDialog(playlist)
                     2 -> AlertDialog.Builder(this).setMessage("Удалить «${playlist.name}» и его каналы?")
-                        .setPositiveButton("Удалить") { _, _ -> worker.submit {
-                            db.playlistDao().delete(playlist.id)
-                            db.playlistDao().clearChannels(playlist.id)
-                            db.playlistDao().clearFavorites(playlist.id)
-                            db.playlistDao().clearRecent(playlist.id)
-                        } }.setNegativeButton("Отмена", null).show()
+                        .setPositiveButton("Удалить") { _, _ ->
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                db.playlistDao().delete(playlist.id)
+                                db.playlistDao().clearChannels(playlist.id)
+                                db.playlistDao().clearFavorites(playlist.id)
+                                db.playlistDao().clearRecent(playlist.id)
+                            }
+                        }.setNegativeButton("Отмена", null).show()
                 }
             }.show()
     }
-
-    override fun onDestroy() { worker.shutdownNow(); super.onDestroy() }
 }

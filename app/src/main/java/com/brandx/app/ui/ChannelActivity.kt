@@ -10,8 +10,8 @@ import com.brandx.app.data.Channel
 import com.brandx.app.data.Favorite
 import com.brandx.app.data.RecentChannel
 import com.brandx.app.data.VedaDatabase
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class ChannelActivity : AppCompatActivity() {
@@ -51,12 +51,9 @@ class ChannelActivity : AppCompatActivity() {
         list.setOnItemClickListener { _, _, index, _ -> visible.getOrNull(index)?.let(::open) }
         list.setOnItemLongClickListener { _, _, index, _ ->
             visible.getOrNull(index)?.let { channel ->
-                lifecycleScope.launch {
+                lifecycleScope.launch(Dispatchers.IO) {
                     if (channel.url in favorites) db.channelDao().removeFavorite(playlistId, channel.url)
                     else db.channelDao().addFavorite(Favorite(playlistId, channel.url, System.currentTimeMillis()))
-                    favorites = db.channelDao().observeFavorites(playlistId).first().map { it.url }.toSet()
-                    filter()
-                    Toast.makeText(this@ChannelActivity, if (channel.url in favorites) "Добавлено в избранное" else "Удалено из избранного", Toast.LENGTH_SHORT).show()
                 }
             }
             true
@@ -100,15 +97,15 @@ class ChannelActivity : AppCompatActivity() {
     }
 
     private fun open(channel: Channel) {
-        lifecycleScope.launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             db.channelDao().addRecent(RecentChannel(playlistId, channel.url, System.currentTimeMillis()))
-            startActivity(
-                Intent(this@ChannelActivity, PlayerActivity::class.java)
-                    .putExtra("playlistId", playlistId)
-                    .putExtra("url", channel.url)
-                    .putExtra("name", channel.name)
-                    .putExtra("hls", channel.hls)
-            )
         }
+        startActivity(
+            Intent(this, PlayerActivity::class.java)
+                .putExtra("playlistId", playlistId)
+                .putExtra("url", channel.url)
+                .putExtra("name", channel.name)
+                .putExtra("hls", channel.hls)
+        )
     }
 }
