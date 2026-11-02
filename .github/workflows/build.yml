@@ -23,6 +23,21 @@ jobs:
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
 
+      - name: Show Gradle files
+        run: |
+          echo '--- settings.gradle ---'
+          cat settings.gradle 2>/dev/null || true
+          echo '--- settings.gradle.kts ---'
+          cat settings.gradle.kts 2>/dev/null || true
+          echo '--- build.gradle ---'
+          cat build.gradle 2>/dev/null || true
+          echo '--- build.gradle.kts ---'
+          cat build.gradle.kts 2>/dev/null || true
+          echo '--- app/build.gradle ---'
+          cat app/build.gradle 2>/dev/null || true
+          echo '--- app/build.gradle.kts ---'
+          cat app/build.gradle.kts 2>/dev/null || true
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
 
